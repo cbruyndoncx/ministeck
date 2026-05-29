@@ -99,12 +99,21 @@ export function GameBoard({
   // Pre-compute solution piece shapes for peek mode
   const peekPieces = useMemo((): Array<SolutionPiece & { coveredCells: Cell[] }> => {
     const sol = puzzle._solution
-    if (!sol) return []
-    return sol.map(p => ({
-      ...p,
-      coveredCells: getCoveredCells(p.origin, p.shape, p.rotation),
+    if (sol && sol.length > 0) {
+      return sol.map(p => ({
+        ...p,
+        coveredCells: getCoveredCells(p.origin, p.shape, p.rotation),
+      }))
+    }
+    // Fallback: show each target cell as a single — at least colours are visible
+    return puzzle.targetCells.map(tc => ({
+      shape: 'single' as const,
+      rotation: 0 as const,
+      colorId: tc.colorId,
+      origin: tc,
+      coveredCells: [{ row: tc.row, col: tc.col }],
     }))
-  }, [puzzle._solution])
+  }, [puzzle._solution, puzzle.targetCells])
 
   // All valid origin cells for the currently selected piece + rotation
   const validOrigins = useMemo(() => {
