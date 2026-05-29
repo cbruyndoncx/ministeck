@@ -12,31 +12,25 @@ interface Props {
 export function GameScreen({ puzzle, onBack }: Props) {
   const game = useGameState()
   const [isPeeking, setIsPeeking] = useState(false)
+  const [isRemoving, setIsRemoving] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
 
-  useEffect(() => {
-    game.loadPuzzle(puzzle)
-  }, [puzzle])
+  useEffect(() => { game.loadPuzzle(puzzle) }, [puzzle])
+  useEffect(() => { if (game.isComplete) setShowComplete(true) }, [game.isComplete])
 
+  // Keyboard shortcuts (desktop)
   useEffect(() => {
-    if (game.isComplete) setShowComplete(true)
-  }, [game.isComplete])
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const down = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat) { e.preventDefault(); setIsPeeking(true) }
       if (e.code === 'KeyR') game.rotate()
       if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); game.undo() }
     }
-    const handleKeyUp = (e: KeyboardEvent) => {
+    const up = (e: KeyboardEvent) => {
       if (e.code === 'Space') { e.preventDefault(); setIsPeeking(false) }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('keyup', handleKeyUp)
-    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
   }, [game.rotate, game.undo])
 
   const totalCells = puzzle.targetCells.length
@@ -54,20 +48,20 @@ export function GameScreen({ puzzle, onBack }: Props) {
         <div className="game-actions">
           <button className="btn-icon" onClick={game.rotate} title="Rotate (R)">↻</button>
           <button
-            className="btn-icon"
-            onClick={game.undo}
-            disabled={!game.canUndo}
-            title="Undo last piece (Ctrl+Z)"
-            style={{ opacity: game.canUndo ? 1 : 0.3 }}
+            className={`btn-icon${isRemoving ? ' active-mode' : ''}`}
+            onClick={() => setIsRemoving(r => !r)}
+            title="Remove mode — tap a placed piece to remove it"
           >
-            ↩
+            ✕
           </button>
-          <button className="btn-icon" onClick={game.reset} title="Reset puzzle">⟳</button>
+          <button className="btn-icon" onClick={game.undo} disabled={!game.canUndo}
+            title="Undo (Ctrl+Z)" style={{ opacity: game.canUndo ? 1 : 0.3 }}>↩</button>
+          <button className="btn-icon" onClick={game.reset} title="Reset">⟳</button>
         </div>
       </header>
 
       {isPeeking && (
-        <div className="peek-banner">👁 Peeking — release Space to continue</div>
+        <div className="peek-banner">👁 Peeking…</div>
       )}
 
       <div className="game-layout">
@@ -78,24 +72,22 @@ export function GameScreen({ puzzle, onBack }: Props) {
               palette={puzzle.palette}
               selectedShape={game.selectedShape}
               selectedColor={game.selectedColor}
-              onSelect={game.select}
+              onSelect={(shape, color) => { setIsRemoving(false); game.select(shape, color) }}
             />
           )}
         </aside>
 
         <main className="game-main">
-          {game.lastError && (
-            <div className="error-toast">{errorMessage(game.lastError)}</div>
-          )}
-
+          {game.lastError && <div className="error-toast">{errorMessage(game.lastError)}</div>}
           {!game.isLoading && game.puzzle && (
             <GameBoard
               puzzle={game.puzzle}
               placedPieces={game.placedPieces}
-              selectedShape={game.selectedShape}
-              selectedColor={game.selectedColor}
+              selectedShape={isRemoving ? null : game.selectedShape}
+              selectedColor={isRemoving ? null : game.selectedColor}
               selectedRotation={game.selectedRotation}
               isPeeking={isPeeking}
+              isRemoving={isRemoving}
               onPlace={game.place}
               onRemove={game.remove}
             />
@@ -107,8 +99,16 @@ export function GameScreen({ puzzle, onBack }: Props) {
         <div className="progress-bar">
           <div className="progress-fill" style={{ width: `${progress}%` }} />
         </div>
-        <span className="progress-label">{progress}% complete</span>
-        <span className="peek-hint">Space: peek · R: rotate · Ctrl+Z: undo · Right-click: remove</span>
+        <span className="progress-label">{progress}%</span>
+        {/* Peek button — works for both touch hold and mouse */}
+        <button
+          className="btn-peek"
+          onPointerDown={() => setIsPeeking(true)}
+          onPointerUp={() => setIsPeeking(false)}
+          onPointerLeave={() => setIsPeeking(false)}
+        >
+          👁 Peek
+        </button>
       </footer>
 
       {showComplete && (
@@ -128,10 +128,10 @@ export function GameScreen({ puzzle, onBack }: Props) {
 
 function errorMessage(error: string): string {
   switch (error) {
-    case 'out-of-bounds': return 'Piece goes outside the board'
-    case 'overlap':       return 'That cell is already filled'
-    case 'wrong-color':   return 'Wrong color for this position'
-    case 'no-inventory':  return 'No more pieces of that type'
+    case 'out-of-bounds': return 'Outside the board'
+    case 'overlap':       return 'Already filled'
+    case 'wrong-color':   return 'Wrong color here'
+    case 'no-inventory':  return 'No more of that piece'
     default:              return 'Invalid placement'
   }
 }

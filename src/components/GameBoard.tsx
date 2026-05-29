@@ -10,6 +10,7 @@ interface Props {
   selectedColor: string | null
   selectedRotation: Rotation
   isPeeking: boolean
+  isRemoving: boolean
   onPlace: (origin: { row: number; col: number }) => void
   onRemove: (pieceId: string) => void
 }
@@ -69,6 +70,7 @@ export function GameBoard({
   selectedColor,
   selectedRotation,
   isPeeking,
+  isRemoving,
   onPlace,
   onRemove,
 }: Props) {
@@ -156,11 +158,53 @@ export function GameBoard({
 
   const handleMouseLeave = useCallback(() => setHoverCell(null), [])
 
+  // Touch: update hover cell as finger moves (enables preview on touch)
+  const handleTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    const t = e.touches[0]
+    if (!t) return
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const scaleX = (puzzle.gridWidth * CELL_SIZE) / rect.width
+    const scaleY = (puzzle.gridHeight * CELL_SIZE) / rect.height
+    const col = Math.floor(((t.clientX - rect.left) * scaleX) / CELL_SIZE)
+    const row = Math.floor(((t.clientY - rect.top) * scaleY) / CELL_SIZE)
+    if (row >= 0 && row < puzzle.gridHeight && col >= 0 && col < puzzle.gridWidth)
+      setHoverCell({ row, col })
+  }, [puzzle])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    // Use changedTouches for the lifted finger
+    const t = e.changedTouches[0]
+    if (!t) return
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const scaleX = (puzzle.gridWidth * CELL_SIZE) / rect.width
+    const scaleY = (puzzle.gridHeight * CELL_SIZE) / rect.height
+    const col = Math.floor(((t.clientX - rect.left) * scaleX) / CELL_SIZE)
+    const row = Math.floor(((t.clientY - rect.top) * scaleY) / CELL_SIZE)
+    if (row < 0 || row >= puzzle.gridHeight || col < 0 || col >= puzzle.gridWidth) return
+    const cell = { row, col }
+    if (isRemoving) {
+      const piece = placedMap.get(cellKey(cell))
+      if (piece) onRemove(piece.id)
+    } else if (selectedShape && selectedColor) {
+      onPlace(cell)
+    }
+    setHoverCell(null)
+  }, [puzzle, isRemoving, selectedShape, selectedColor, placedMap, onPlace, onRemove])
+
   const handleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     const cell = getSvgCell(e)
     if (!cell) return
-    if (selectedShape && selectedColor) onPlace(cell)
-  }, [getSvgCell, selectedShape, selectedColor, onPlace])
+    if (isRemoving) {
+      const piece = placedMap.get(cellKey(cell))
+      if (piece) onRemove(piece.id)
+    } else if (selectedShape && selectedColor) {
+      onPlace(cell)
+    }
+  }, [getSvgCell, isRemoving, selectedShape, selectedColor, placedMap, onPlace, onRemove])
 
   const handleContextMenu = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     e.preventDefault()
@@ -179,11 +223,14 @@ export function GameBoard({
         ref={svgRef}
         viewBox={`0 0 ${boardW} ${boardH}`}
         width="100%"
-        style={{ maxWidth: boardW * 2, display: 'block', cursor: selectedShape ? 'crosshair' : 'default' }}
+        style={{ maxWidth: boardW * 2, display: 'block' }}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ maxWidth: boardW * 2, display: 'block', cursor: isRemoving ? 'pointer' : selectedShape ? 'crosshair' : 'default', touchAction: 'none' }}
       >
         <rect width={boardW} height={boardH} fill="#2a2a3e" />
 
