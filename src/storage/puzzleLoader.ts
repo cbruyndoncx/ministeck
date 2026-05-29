@@ -8,7 +8,8 @@ export async function loadTodayPuzzle(date: string): Promise<Puzzle | null> {
 
   // Try fetching from static JSON
   try {
-    const res = await fetch(`/puzzles/${date}.json`)
+    const base = import.meta.env.BASE_URL
+    const res = await fetch(`${base}puzzles/${date}.json`)
     if (res.ok) {
       const puzzle: Puzzle = await res.json()
       await savePuzzle(puzzle)

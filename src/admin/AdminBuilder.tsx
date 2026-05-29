@@ -26,9 +26,11 @@ export function AdminBuilder({ onPublished }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const base = import.meta.env.BASE_URL
+
   useEffect(() => {
-    fetch('/images/index.json').then(r => r.json()).then(setLibrary).catch(() => {})
-  }, [])
+    fetch(`${base}images/index.json`).then(r => r.json()).then(setLibrary).catch(() => {})
+  }, [base])
 
   const loadImageUrl = useCallback((url: string, label: string, cs: number) => {
     setImageUrl(url)
@@ -154,9 +156,9 @@ export function AdminBuilder({ onPublished }: Props) {
               <button
                 key={entry.file}
                 className={`lib-thumb${imageLabel === entry.label ? ' selected' : ''}`}
-                onClick={() => loadImageUrl(`/images/${entry.file}`, entry.label, entry.cellSize)}
+                onClick={() => loadImageUrl(`${base}images/${entry.file}`, entry.label, entry.cellSize)}
               >
-                <img src={`/images/${entry.file}`} alt={entry.label} />
+                <img src={`${base}images/${entry.file}`} alt={entry.label} />
                 <span>{entry.label}</span>
               </button>
             ))}
