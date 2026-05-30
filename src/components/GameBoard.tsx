@@ -75,6 +75,8 @@ export function GameBoard({
   onRemove,
 }: Props) {
   const [hoverCell, setHoverCell] = useState<Cell | null>(null)
+  const [pointerDown, setPointerDown] = useState(false)
+  const lastPlacedKey = useRef<string | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
   const colorMap = useMemo(() => {
@@ -161,9 +163,24 @@ export function GameBoard({
     return { row, col }
   }, [puzzle])
 
+  // Try to place at cell, skipping if same cell was just placed
+  const tryPlace = useCallback((cell: Cell) => {
+    const key = `${cell.row},${cell.col}`
+    if (lastPlacedKey.current === key) return
+    if (isRemoving) {
+      const piece = placedMap.get(cellKey(cell))
+      if (piece) { onRemove(piece.id); lastPlacedKey.current = key }
+    } else if (selectedShape && selectedColor) {
+      onPlace(cell)
+      lastPlacedKey.current = key
+    }
+  }, [isRemoving, selectedShape, selectedColor, placedMap, onPlace, onRemove])
+
   const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    setHoverCell(getSvgCell(e))
-  }, [getSvgCell])
+    const cell = getSvgCell(e)
+    setHoverCell(cell)
+    if (pointerDown && cell) tryPlace(cell)
+  }, [getSvgCell, pointerDown, tryPlace])
 
   const handleMouseLeave = useCallback(() => setHoverCell(null), [])
 
@@ -204,16 +221,22 @@ export function GameBoard({
     setHoverCell(null)
   }, [puzzle, isRemoving, selectedShape, selectedColor, placedMap, onPlace, onRemove])
 
+  const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    setPointerDown(true)
+    lastPlacedKey.current = null
+    ;(e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId)
+  }, [])
+
+  const handlePointerUp = useCallback(() => {
+    setPointerDown(false)
+    lastPlacedKey.current = null
+  }, [])
+
   const handleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     const cell = getSvgCell(e)
     if (!cell) return
-    if (isRemoving) {
-      const piece = placedMap.get(cellKey(cell))
-      if (piece) onRemove(piece.id)
-    } else if (selectedShape && selectedColor) {
-      onPlace(cell)
-    }
-  }, [getSvgCell, isRemoving, selectedShape, selectedColor, placedMap, onPlace, onRemove])
+    tryPlace(cell)
+  }, [getSvgCell, tryPlace])
 
   const handleContextMenu = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     e.preventDefault()
@@ -232,14 +255,15 @@ export function GameBoard({
         ref={svgRef}
         viewBox={`0 0 ${boardW} ${boardH}`}
         width="100%"
-        style={{ maxWidth: boardW * 2, display: 'block' }}
+        style={{ maxWidth: boardW * 2, display: 'block', cursor: isRemoving ? 'pointer' : selectedShape ? 'crosshair' : 'default', touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        style={{ maxWidth: boardW * 2, display: 'block', cursor: isRemoving ? 'pointer' : selectedShape ? 'crosshair' : 'default', touchAction: 'none' }}
       >
         <rect width={boardW} height={boardH} fill="#2a2a3e" />
 

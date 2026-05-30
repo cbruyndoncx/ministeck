@@ -114,23 +114,8 @@ export function AdminBuilder({ onPublished }: Props) {
       }
     }
 
-    // Auto-detect background: most common edge colour
-    const edgeCells = rawCells.filter(c =>
-      c.row === 0 || c.col === 0 || c.row === gridH - 1 || c.col === gridW - 1
-    )
-    let bgR = 255, bgG = 255, bgB = 255
-    if (edgeCells.length > 0) {
-      bgR = edgeCells.reduce((s, c) => s + c.r, 0) / edgeCells.length
-      bgG = edgeCells.reduce((s, c) => s + c.g, 0) / edgeCells.length
-      bgB = edgeCells.reduce((s, c) => s + c.b, 0) / edgeCells.length
-    }
-
-    // Filter out cells that are close to background or near-transparent
-    const contentCells = rawCells.filter(c => {
-      if (c.a < 40) return false  // transparent
-      const distToBg = (c.r - bgR) ** 2 + (c.g - bgG) ** 2 + (c.b - bgB) ** 2
-      return distToBg > 1200  // must differ from background by threshold
-    })
+    // Keep all non-transparent cells — fully coloured images are fine as-is
+    const contentCells = rawCells.filter(c => c.a >= 40)
 
     if (contentCells.length === 0) {
       setStatus('No content found — try a smaller cell size or different image.')

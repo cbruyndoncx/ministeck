@@ -1,5 +1,5 @@
 [
   { "file": "hummingbird.png", "label": "Hummingbird", "cellSize": 8 },
-  { "file": "fish.png",        "label": "Fish",        "cellSize": 8 },
-  { "file": "flower.png",      "label": "Flower",      "cellSize": 8 }
+  { "file": "puppy.png",       "label": "Puppy",       "cellSize": 8 },
+  { "file": "fish.png",        "label": "Fish",        "cellSize": 8 }
 ]
