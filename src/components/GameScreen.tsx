@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { Puzzle } from '../domain/types'
 import { useGameState } from '../hooks/useGameState'
 import { GameBoard } from './GameBoard'
@@ -9,21 +9,30 @@ interface Props {
   onBack: () => void
 }
 
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 6
+const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
+
 export function GameScreen({ puzzle, onBack }: Props) {
   const game = useGameState()
   const [isPeeking, setIsPeeking] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const layoutRef = useRef<HTMLDivElement>(null)
+  const pinchRef = useRef<number | null>(null)
 
   useEffect(() => { game.loadPuzzle(puzzle) }, [puzzle])
   useEffect(() => { if (game.isComplete) setShowComplete(true) }, [game.isComplete])
 
-  // Keyboard shortcuts (desktop)
+  // Keyboard shortcuts
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat) { e.preventDefault(); setIsPeeking(true) }
       if (e.code === 'KeyR') game.rotate()
       if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); game.undo() }
+      if (e.code === 'Equal' || e.code === 'NumpadAdd') setZoom(z => clampZoom(z * 1.2))
+      if (e.code === 'Minus' || e.code === 'NumpadSubtract') setZoom(z => clampZoom(z / 1.2))
     }
     const up = (e: KeyboardEvent) => {
       if (e.code === 'Space') { e.preventDefault(); setIsPeeking(false) }
@@ -32,6 +41,51 @@ export function GameScreen({ puzzle, onBack }: Props) {
     window.addEventListener('keyup', up)
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
   }, [game.rotate, game.undo])
+
+  // Mouse wheel zoom on the layout area
+  useEffect(() => {
+    const el = layoutRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return  // only zoom when Ctrl held (to allow normal scroll)
+      e.preventDefault()
+      setZoom(z => clampZoom(z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Pinch-to-zoom on touch
+  useEffect(() => {
+    const el = layoutRef.current
+    if (!el) return
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        pinchRef.current = Math.hypot(dx, dy)
+      }
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchRef.current !== null) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const dist = Math.hypot(dx, dy)
+        setZoom(z => clampZoom(z * (dist / pinchRef.current!)))
+        pinchRef.current = dist
+        e.preventDefault()
+      }
+    }
+    const onTouchEnd = () => { pinchRef.current = null }
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd)
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [])
 
   const totalCells = puzzle.targetCells.length
   const placedCount = game.placedPieces.reduce((s, p) => s + p.coveredCells.length, 0)
@@ -46,25 +100,24 @@ export function GameScreen({ puzzle, onBack }: Props) {
           <span className="puzzle-date">{puzzle.date}</span>
         </div>
         <div className="game-actions">
+          <button className="btn-icon" onClick={() => setZoom(z => clampZoom(z * 1.3))} title="Zoom in (+)">＋</button>
+          <button className="btn-icon" onClick={() => setZoom(1)} title="Reset zoom" style={{ fontSize: 11 }}>{Math.round(zoom * 100)}%</button>
+          <button className="btn-icon" onClick={() => setZoom(z => clampZoom(z / 1.3))} title="Zoom out (-)">－</button>
           <button className="btn-icon" onClick={game.rotate} title="Rotate (R)">↻</button>
           <button
             className={`btn-icon${isRemoving ? ' active-mode' : ''}`}
             onClick={() => setIsRemoving(r => !r)}
-            title="Remove mode — tap a placed piece to remove it"
-          >
-            ✕
-          </button>
+            title="Remove mode"
+          >✕</button>
           <button className="btn-icon" onClick={game.undo} disabled={!game.canUndo}
             title="Undo (Ctrl+Z)" style={{ opacity: game.canUndo ? 1 : 0.3 }}>↩</button>
           <button className="btn-icon" onClick={game.reset} title="Reset">⟳</button>
         </div>
       </header>
 
-      {isPeeking && (
-        <div className="peek-banner">👁 Peeking…</div>
-      )}
+      {isPeeking && <div className="peek-banner">👁 Peeking…</div>}
 
-      <div className="game-layout">
+      <div className="game-layout" ref={layoutRef}>
         <aside className="game-sidebar">
           {!game.isLoading && (
             <PieceTray
@@ -88,6 +141,7 @@ export function GameScreen({ puzzle, onBack }: Props) {
               selectedRotation={game.selectedRotation}
               isPeeking={isPeeking}
               isRemoving={isRemoving}
+              zoom={zoom}
               onPlace={game.place}
               onRemove={game.remove}
             />
@@ -100,7 +154,6 @@ export function GameScreen({ puzzle, onBack }: Props) {
           <div className="progress-fill" style={{ width: `${progress}%` }} />
         </div>
         <span className="progress-label">{progress}%</span>
-        {/* Peek button — works for both touch hold and mouse */}
         <button
           className="btn-peek"
           onPointerDown={() => setIsPeeking(true)}

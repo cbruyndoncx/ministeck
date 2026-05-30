@@ -11,6 +11,7 @@ interface Props {
   selectedRotation: Rotation
   isPeeking: boolean
   isRemoving: boolean
+  zoom: number
   onPlace: (origin: { row: number; col: number }) => void
   onRemove: (pieceId: string) => void
 }
@@ -71,6 +72,7 @@ export function GameBoard({
   selectedRotation,
   isPeeking,
   isRemoving,
+  zoom,
   onPlace,
   onRemove,
 }: Props) {
@@ -250,7 +252,7 @@ export function GameBoard({
   const boardH = puzzle.gridHeight * CELL_SIZE
 
   return (
-    <div className="board-wrapper" data-testid="game-board">
+    <div className="board-wrapper" data-testid="game-board" style={{ width: `${zoom * 100}%`, minWidth: `${zoom * 100}%` }}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${boardW} ${boardH}`}
